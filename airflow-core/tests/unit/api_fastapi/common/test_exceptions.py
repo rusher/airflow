@@ -226,8 +226,8 @@ class TestUniqueConstraintErrorHandler:
         # orig_error exact format varies between database servers (e.g. MariaDB qualifies
         # constraint names with a table prefix while MySQL does not), so when expected
         # orig_error is a list, verify the actual value matches one of the expected values.
-        actual_orig = response_detail.pop("orig_error", None)
-        expected_orig = expected_detail.pop("orig_error", None)
+        actual_orig = response_detail.pop("orig_error", None)  # type: ignore[union-attr]
+        expected_orig = expected_detail.pop("orig_error", None)  # type: ignore[union-attr]
         assert response_detail == expected_detail
         if isinstance(expected_orig, list):
             assert actual_orig in expected_orig
@@ -311,8 +311,8 @@ class TestUniqueConstraintErrorHandler:
         # orig_error exact format varies between database servers (e.g. MariaDB qualifies
         # constraint names with a table prefix while MySQL does not), so when expected
         # orig_error is a list, verify the actual value matches one of the expected values.
-        actual_orig = response_detail.pop("orig_error", None)
-        expected_orig = expected_detail.pop("orig_error", None)
+        actual_orig = response_detail.pop("orig_error", None)  # type: ignore[union-attr]
+        expected_orig = expected_detail.pop("orig_error", None)  # type: ignore[union-attr]
         assert response_detail == expected_detail
         if isinstance(expected_orig, list):
             assert actual_orig in expected_orig
