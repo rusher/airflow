@@ -138,7 +138,10 @@ class TestUniqueConstraintErrorHandler:
                         status_code=status.HTTP_409_CONFLICT,
                         detail={
                             "reason": "Unique constraint violation",
-                            "statement": "INSERT INTO slot_pool (pool, slots, description, include_deferred, team_name) VALUES (%(pool)s, %(slots)s, %(description)s, %(include_deferred)s, %(team_name)s)",
+                            "statement": [
+                                "INSERT INTO slot_pool (pool, slots, description, include_deferred, team_name) VALUES (%(pool)s, %(slots)s, %(description)s, %(include_deferred)s, %(team_name)s)",
+                                "INSERT INTO slot_pool (pool, slots, description, include_deferred, team_name) VALUES (%s, %s, %s, %s, %s)",
+                            ],
                             "orig_error": [
                                 "(1062, \"Duplicate entry 'test_pool' for key 'slot_pool_pool_uq'\")",
                                 "(1062, \"Duplicate entry 'test_pool' for key 'slot_pool.slot_pool_pool_uq'\")",
@@ -170,7 +173,10 @@ class TestUniqueConstraintErrorHandler:
                         status_code=status.HTTP_409_CONFLICT,
                         detail={
                             "reason": "Unique constraint violation",
-                            "statement": "INSERT INTO variable (`key`, val, description, is_encrypted, team_name) VALUES (%(key)s, %(val)s, %(description)s, %(is_encrypted)s, %(team_name)s)",
+                            "statement": [
+                                "INSERT INTO variable (`key`, val, description, is_encrypted, team_name) VALUES (%(key)s, %(val)s, %(description)s, %(is_encrypted)s, %(team_name)s)",
+                                "INSERT INTO variable (`key`, val, description, is_encrypted, team_name) VALUES (%s, %s, %s, %s, %s)",
+                            ],
                             "orig_error": [
                                 "(1062, \"Duplicate entry 'test_key' for key 'variable_key_uq'\")",
                                 "(1062, \"Duplicate entry 'test_key' for key 'variable.variable_key_uq'\")",
@@ -223,16 +229,18 @@ class TestUniqueConstraintErrorHandler:
         assert exeinfo_response_error.value.status_code == expected_exception.status_code
         response_detail = exeinfo_response_error.value.detail
         expected_detail = expected_exception.detail
-        # orig_error exact format varies between database servers (e.g. MariaDB qualifies
-        # constraint names with a table prefix while MySQL does not), so when expected
-        # orig_error is a list, verify the actual value matches one of the expected values.
-        actual_orig = response_detail.pop("orig_error", None)  # type: ignore[union-attr]
-        expected_orig = expected_detail.pop("orig_error", None)  # type: ignore[union-attr]
+        # statement and orig_error exact formats vary between database servers and connectors
+        # (e.g. mysqlclient uses %(name)s params while PyMySQL uses %s, and MariaDB qualifies
+        # constraint names with a table prefix while MySQL does not), so when the expected
+        # value is a list, verify the actual value matches one of the expected values.
+        for key in ("statement", "orig_error"):
+            actual_val = response_detail.pop(key, None)  # type: ignore[attr-defined]
+            expected_val = expected_detail.pop(key, None)  # type: ignore[attr-defined]
+            if isinstance(expected_val, list):
+                assert actual_val in expected_val, f"{key}: {actual_val!r} not in {expected_val!r}"
+            else:
+                assert actual_val == expected_val, f"{key}: {actual_val!r} != {expected_val!r}"
         assert response_detail == expected_detail
-        if isinstance(expected_orig, list):
-            assert actual_orig in expected_orig
-        else:
-            assert actual_orig == expected_orig
 
     @pytest.mark.parametrize(
         ("table", "expected_exception"),
@@ -302,22 +310,23 @@ class TestUniqueConstraintErrorHandler:
             self.unique_constraint_error_handler.exception_handler(None, exeinfo_integrity_error.value)  # type: ignore
 
         assert exeinfo_response_error.value.status_code == expected_exception.status_code
-        # The SQL statement is an implementation detail, so we match on the statement pattern (contains
-        # the table name and is an INSERT) instead of insisting on an exact match.
         response_detail = exeinfo_response_error.value.detail
         expected_detail = expected_exception.detail
+        # statement and orig_error exact formats vary between database servers and connectors
+        # (e.g. mysqlclient uses %(name)s params while PyMySQL uses %s, and MariaDB qualifies
+        # constraint names with a table prefix while MySQL does not), so when the expected
+        # value is a list, verify the actual value matches one of the expected values.
+        # The SQL statement is also an implementation detail, so we match on the statement
+        # pattern (contains the table name and is an INSERT) instead of insisting on exact match.
         actual_statement = response_detail.pop("statement", None)  # type: ignore[attr-defined]
-        expected_detail.pop("statement", None)
-        # orig_error exact format varies between database servers (e.g. MariaDB qualifies
-        # constraint names with a table prefix while MySQL does not), so when expected
-        # orig_error is a list, verify the actual value matches one of the expected values.
-        actual_orig = response_detail.pop("orig_error", None)  # type: ignore[union-attr]
-        expected_orig = expected_detail.pop("orig_error", None)  # type: ignore[union-attr]
+        expected_detail.pop("statement", None)  # type: ignore[attr-defined]
+        actual_orig = response_detail.pop("orig_error", None)  # type: ignore[attr-defined]
+        expected_orig = expected_detail.pop("orig_error", None)  # type: ignore[attr-defined]
         assert response_detail == expected_detail
         if isinstance(expected_orig, list):
-            assert actual_orig in expected_orig
+            assert actual_orig in expected_orig, f"orig_error: {actual_orig!r} not in {expected_orig!r}"
         else:
-            assert actual_orig == expected_orig
+            assert actual_orig == expected_orig, f"orig_error: {actual_orig!r} != {expected_orig!r}"
         assert "INSERT INTO dag_run" in actual_statement
 
 
