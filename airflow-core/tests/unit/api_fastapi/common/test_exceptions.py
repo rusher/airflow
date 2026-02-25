@@ -138,8 +138,11 @@ class TestUniqueConstraintErrorHandler:
                         status_code=status.HTTP_409_CONFLICT,
                         detail={
                             "reason": "Unique constraint violation",
-                            "statement": "INSERT INTO slot_pool (pool, slots, description, include_deferred, team_name) VALUES (%s, %s, %s, %s, %s)",
-                            "orig_error": "(1062, \"Duplicate entry 'test_pool' for key 'slot_pool.slot_pool_pool_uq'\")",
+                            "statement": "INSERT INTO slot_pool (pool, slots, description, include_deferred, team_name) VALUES (%(pool)s, %(slots)s, %(description)s, %(include_deferred)s, %(team_name)s)",
+                            "orig_error": [
+                                "(1062, \"Duplicate entry 'test_pool' for key 'slot_pool_pool_uq'\")",
+                                "(1062, \"Duplicate entry 'test_pool' for key 'slot_pool.slot_pool_pool_uq'\")",
+                            ],
                             "message": MESSAGE,
                         },
                     ),
@@ -167,8 +170,11 @@ class TestUniqueConstraintErrorHandler:
                         status_code=status.HTTP_409_CONFLICT,
                         detail={
                             "reason": "Unique constraint violation",
-                            "statement": "INSERT INTO variable (`key`, val, description, is_encrypted, team_name) VALUES (%s, %s, %s, %s, %s)",
-                            "orig_error": "(1062, \"Duplicate entry 'test_key' for key 'variable.variable_key_uq'\")",
+                            "statement": "INSERT INTO variable (`key`, val, description, is_encrypted, team_name) VALUES (%(key)s, %(val)s, %(description)s, %(is_encrypted)s, %(team_name)s)",
+                            "orig_error": [
+                                "(1062, \"Duplicate entry 'test_key' for key 'variable_key_uq'\")",
+                                "(1062, \"Duplicate entry 'test_key' for key 'variable.variable_key_uq'\")",
+                            ],
                             "message": MESSAGE,
                         },
                     ),
@@ -215,7 +221,18 @@ class TestUniqueConstraintErrorHandler:
             self.unique_constraint_error_handler.exception_handler(None, exeinfo_integrity_error.value)  # type: ignore
 
         assert exeinfo_response_error.value.status_code == expected_exception.status_code
-        assert exeinfo_response_error.value.detail == expected_exception.detail
+        response_detail = exeinfo_response_error.value.detail
+        expected_detail = expected_exception.detail
+        # orig_error exact format varies between database servers (e.g. MariaDB qualifies
+        # constraint names with a table prefix while MySQL does not), so when expected
+        # orig_error is a list, verify the actual value matches one of the expected values.
+        actual_orig = response_detail.pop("orig_error", None)
+        expected_orig = expected_detail.pop("orig_error", None)
+        assert response_detail == expected_detail
+        if isinstance(expected_orig, list):
+            assert actual_orig in expected_orig
+        else:
+            assert actual_orig == expected_orig
 
     @pytest.mark.parametrize(
         ("table", "expected_exception"),
@@ -236,8 +253,10 @@ class TestUniqueConstraintErrorHandler:
                         status_code=status.HTTP_409_CONFLICT,
                         detail={
                             "reason": "Unique constraint violation",
-                            "statement": "INSERT INTO dag_run (dag_id, queued_at, logical_date, start_date, end_date, state, run_id, creating_job_id, run_type, triggered_by, triggering_user_name, conf, data_interval_start, data_interval_end, run_after, last_scheduling_decision, log_template_id, updated_at, clear_number, backfill_id, bundle_version, scheduled_by_job_id, context_carrier, created_dag_version_id, partition_key) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, (SELECT max(log_template.id) AS max_1 \nFROM log_template), %s, %s, %s, %s, %s, %s, %s, %s)",
-                            "orig_error": "(1062, \"Duplicate entry 'test_dag_id-test_run_id' for key 'dag_run.dag_run_dag_id_run_id_key'\")",
+                            "orig_error": [
+                                "(1062, \"Duplicate entry 'test_dag_id-test_run_id' for key 'dag_run_dag_id_run_id_key'\")",
+                                "(1062, \"Duplicate entry 'test_dag_id-test_run_id' for key 'dag_run.dag_run_dag_id_run_id_key'\")",
+                            ],
                             "message": MESSAGE,
                         },
                     ),
@@ -289,10 +308,17 @@ class TestUniqueConstraintErrorHandler:
         expected_detail = expected_exception.detail
         actual_statement = response_detail.pop("statement", None)  # type: ignore[attr-defined]
         expected_detail.pop("statement", None)
-
+        # orig_error exact format varies between database servers (e.g. MariaDB qualifies
+        # constraint names with a table prefix while MySQL does not), so when expected
+        # orig_error is a list, verify the actual value matches one of the expected values.
+        actual_orig = response_detail.pop("orig_error", None)
+        expected_orig = expected_detail.pop("orig_error", None)
         assert response_detail == expected_detail
+        if isinstance(expected_orig, list):
+            assert actual_orig in expected_orig
+        else:
+            assert actual_orig == expected_orig
         assert "INSERT INTO dag_run" in actual_statement
-        assert exeinfo_response_error.value.detail == expected_exception.detail
 
 
 class TestDagErrorHandler:
