@@ -166,7 +166,7 @@ jobs:
       INCLUDE_SUCCESS_OUTPUTS: ${{ inputs.include-success-outputs }}
       PLATFORM: "${{ inputs.platform }}"
       # yamllint disable rule:line-length
-      JOB_ID: "${{ inputs.test-group }}-${{ matrix.test-types.description }}-${{ inputs.test-scope }}-${{ inputs.test-name }}-${{inputs.backend}}-${{ matrix.backend-version }}-${{ matrix.python-version }}"
+      JOB_ID: "${{ inputs.test-group }}-${{ matrix.test-types.description }}-${{ inputs.test-scope }}-${{ inputs.test-name }}-${{inputs.backend}}-${{ replace(matrix.backend-version, ':', '-') }}-${{ matrix.python-version }}"
       MOUNT_SOURCES: "skip"
       # yamllint disable rule:line-length
       PARALLEL_TEST_TYPES: ${{ matrix.test-types.test_types }}
